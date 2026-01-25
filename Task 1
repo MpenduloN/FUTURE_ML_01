@@ -1,1 +1,113 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
 
+# Load data
+df = pd.read_csv("index_2.csv")  # ensure correct filename
+print(df.head())
+print(df.info())
+
+# Date handling
+df['Date'] = pd.to_datetime(df['Date'])
+df = df.sort_values('Date')
+df.set_index('Date', inplace=True)
+
+# Plot historical sales
+plt.figure()
+plt.plot(df.index, df['Sales'])
+plt.title("Historical Sales Over Time")
+plt.xlabel("Date")
+plt.ylabel("Sales")
+plt.show()
+
+# Handle missing values
+print(df.isna().sum())
+df['Sales'] = df['Sales'].fillna(method='ffill')
+
+# Feature engineering
+df['Month'] = df.index.month
+df['Year'] = df.index.year
+df['Sales_lag_1'] = df['Sales'].shift(1)
+df['Sales_lag_3'] = df['Sales'].shift(3)
+df['Rolling_3_mean'] = df['Sales'].rolling(window=3).mean()
+
+df = df.dropna()
+
+# Plot cleaned data
+plt.figure()
+plt.plot(df.index, df['Sales'])
+plt.title("Cleaned Sales Data")
+plt.xlabel("Date")
+plt.ylabel("Sales")
+plt.show()
+
+# Model data
+X = df[['Month', 'Year', 'Sales_lag_1', 'Sales_lag_3', 'Rolling_3_mean']]
+y = df['Sales']
+
+# Train-test split
+train_size = int(len(df) * 0.8)
+X_train = X.iloc[:train_size]
+X_test = X.iloc[train_size:]
+y_train = y.iloc[:train_size]
+y_test = y.iloc[train_size:]
+
+# Train model
+from sklearn.linear_model import LinearRegression
+model = LinearRegression()
+model.fit(X_train, y_train)
+
+# Predictions
+y_pred = model.predict(X_test)
+
+# Evaluation
+from sklearn.metrics import mean_absolute_error, mean_squared_error
+
+mae = mean_absolute_error(y_test, y_pred)
+rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+
+print("MAE:", mae)
+print("RMSE:", rmse)
+
+# Actual vs predicted plot
+plt.figure()
+plt.plot(y_test.index, y_test, label='Actual Sales')
+plt.plot(y_test.index, y_pred, label='Predicted Sales')
+plt.title("Actual vs Predicted Sales")
+plt.xlabel("Date")
+plt.ylabel("Sales")
+plt.legend()
+plt.show()
+
+# ----------------------
+# Forecasting
+# ----------------------
+forecast_periods = 6  # months
+
+last_date = df.index[-1]
+future_dates = pd.date_range(start=last_date, periods=forecast_periods + 1, freq="M")[1:]
+future_df = pd.DataFrame(index=future_dates)
+
+future_df['Month'] = future_df.index.month
+future_df['Year'] = future_df.index.year
+
+# Use last known values
+future_df['Sales_lag_1'] = df['Sales'].iloc[-1]
+future_df['Sales_lag_3'] = df['Sales'].iloc[-3:].mean()
+future_df['Rolling_3_mean'] = df['Sales'].iloc[-3:].mean()
+
+# Forecast
+future_df['Forecasted_Sales'] = model.predict(future_df)
+
+# Plot forecast
+plt.figure()
+plt.plot(df.index, df['Sales'], label='Historical Sales')
+plt.plot(future_df.index, future_df['Forecasted_Sales'],
+         label='Forecasted Sales', linestyle='--')
+plt.title("Sales Forecast")
+plt.xlabel("Date")
+plt.ylabel("Sales")
+plt.legend()
+plt.show()
+
+print(future_df[['Forecasted_Sales']])
